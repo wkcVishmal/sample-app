@@ -1,49 +1,23 @@
 AWSTemplateFormatVersion: 2010-09-09
 
 Parameters:
-  InstanceType:
-    Description: Type of EC2 instance to launch for the server. Only Compute type nodes are currently specified.
-    Type: String
-    Default: t3.small
-    ConstraintDescription: Must be a valid EC2 instance type
-    AllowedValues: 
-      - t3.micro
-      - t3.small
-      - t3.medium
-  LatestAmiId:
-    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
-  KeyName:
-    Description: Name of an existing EC2 KeyPair to enable SSH access to the instance(s).
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair
-  SSHLocation:
-    Description: The source IP address (/32) or source IP address range (x.x.x.x/x) that will be allowed to SSH to the EC2 instances
-    Type: String
-    MinLength: 9
-    MaxLength: 18
-    Default: 0.0.0.0/0
-    AllowedPattern: "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
-    ConstraintDescription: Must be a valid IP CIDR range of the form x.x.x.x/x
-  # JenkinsPort:
-  #   Description: The Port that will be used to access Jenkins (Must be port 1024 or above, unless changing jenkins user).
-  #   Type: Number
-  #   MinValue: 1024
-  #   MaxValue: 65535
-  #   Default: 8080
-  # InstanceTagName:
-  #   Description: Instance Name tag that will be used to define the Name of the instance resource(s)
-  #   Type: String
-  #   Default: Jenkins
   MasterUsername:
     Type: String
     Description: The username for our database.
+    Default: postgres
   MasterUserPassword:
     Type: String
     Description: The password for the database.
+    Default: pgpassword
+    "NoEcho": true
+  JenkinsAdminPassword:
+    Type: String
+    Description: The password for jenkins.
+    Default: p@ssw0rd
     "NoEcho": true
 
 Resources:
+  # VPC, Subnets, NAT gateway, Internet gateway, Route tables
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -53,7 +27,6 @@ Resources:
       Tags:
       - Key: Name
         Value:  !Join ['', [!Ref "AWS::StackName", "-VPC" ]]
- 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     DependsOn: VPC
@@ -62,7 +35,6 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
-
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -117,7 +89,6 @@ Resources:
       Tags:
       - Key: Name
         Value: !Sub ${AWS::StackName}-Private-C
-
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -132,7 +103,6 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
-
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -146,7 +116,6 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       NatGatewayId: !Ref NATGateway
-
   PublicSubnetARouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -177,7 +146,6 @@ Resources:
     Properties:
       SubnetId: !Ref PrivateSubnetC
       RouteTableId: !Ref PrivateRouteTable
-
   NATGateway:
     Type: AWS::EC2::NatGateway
     DependsOn:
@@ -194,163 +162,7 @@ Resources:
     Type: AWS::EC2::EIP
     Properties:
       Domain: VPC
-
-  # EC2 Server Instance Definition
-  # JenkinsInstance:
-  #   Description: EC2 Instance with Java and Jenkins.
-  #   Type: AWS::EC2::Instance
-  #   Metadata:
-  #     AWS::CloudFormation::Init:
-  #       configSets:
-  #         default: [mountVolume, config, jenkinsConfig]
-  #       mountVolume:
-  #         commands:
-  #           01_mkdir:
-  #             command: sudo mkdir -p /var/lib/jenkins
-  #           02_fdisk:
-  #             command: echo -e "o\nn\np\n1\n\n\nw" | sudo fdisk /dev/sdb
-  #           03_wait:
-  #             command: sleep 3
-  #           04_mkfs:
-  #             command: sudo mkfs.ext4 /dev/sdb1
-  #           05_disk_label:
-  #             command: e2label /dev/sdb1 JENKINS
-  #           06_fstab:
-  #             command: echo -e "LABEL=JENKINS     /var/lib/jenkins    ext4   defaults 0 0" >> /etc/fstab
-  #           07_mount:
-  #             command: mount -a
-
-  #       # This configSet will perform the actual installation of Jenkins
-  #       jenkinsConfig:
-  #         packages:
-  #           yum:
-  #             wget: []
-  #             java-1.8.0-openjdk: []
-  #             java-1.8.0-openjdk-devel: []
-  #             net-tools: []
-  #             git: []
-  #             jq: []
-  #         commands:
-  #           01_epel_repo:
-  #             command: sudo yum update –y
-  #           02_jenkins_repo:
-  #             command: sudo wget -O /etc/yum.repos.d/jenkins.repo https://pkg.jenkins.io/redhat-stable/jenkins.repo
-  #           03_jenkins_key:
-  #             command: sudo rpm --import https://pkg.jenkins.io/redhat-stable/jenkins.io.key
-  #           04_jenkins_dirs:
-  #             command: sudo mkdir -p /home/jenkins /var/lib/jenkins/.ssh /var/cache/jenkins/war /var/log/jenkins
-  #           05_yum_upgrade:
-  #             command: sudo yum upgrade
-  #           06_install_java:
-  #             command: sudo amazon-linux-extras install java-openjdk11 -y
-  #           07_jenkins_install:
-  #             command: sudo yum install -y jenkins
-  #           08_check_jenkins_login:
-  #             command: usermod -s /bin/bash jenkins
-  #           09_set_jenkins_port:
-  #             command: !Sub |
-  #               sudo sed -i "s/JENKINS_PORT=\"8080\"/JENKINS_PORT=\"${JenkinsPort}\"/g" /etc/sysconfig/jenkins
-  #           10_sshconfig:
-  #             command: sudo echo -e "Host *\n\tStrictHostKeyChecking no\n" >> /var/lib/jenkins/.ssh/config
-  #           11_ssh_keygen:
-  #             command: sudo ssh-keygen -t rsa -b 2048 -C jenkins@jenkins -N "" -f /var/lib/jenkins/.ssh/id_rsa; sudo cat /var/lib/jenkins/.ssh/id_rsa.pub > /var/lib/jenkins/.ssh/authorized_keys
-  #           12_set_permissions:
-  #             command: sudo chown -R jenkins:jenkins /home/jenkins /var/lib/jenkins /var/cache/jenkins /var/log/jenkins; sudo chmod 0700 /var/lib/jenkins/.ssh; sudo chmod 0600 /var/lib/jenkins/.ssh/*
-  #           13_firewall:
-  #             command: !Sub |
-  #               sudo firewall-cmd --permanent --add-service=ssh; sudo firewall-cmd --permanent --add-port='${JenkinsPort}'/tcp; sudo firewall-cmd --reload
-  #           14_enable_jenkins:
-  #             command: sudo systemctl enable jenkins
-  #           15_start_jenkins:
-  #             command: sudo systemctl start jenkins
-  #         services:
-  #           sysvinit:
-  #             jenkins:
-  #               enabled: true
-  #               ensureRunning: true
-
-        # Default Config, which handles installing the firewall, and CFN components to talk back to CloudFormation
-        # config:
-        #   packages:
-        #     yum:
-        #       firewalld: []
-        #   commands:
-        #     01_update:
-        #       command: yum -y update
-        #   files:
-        #     '/etc/cfn/cfn-hup.conf':
-        #       content: !Sub |
-        #         [main]
-        #         stack=${AWS::StackId}
-        #         region=${AWS::Region}
-        #         interval=1
-        #       mode: '000400'
-        #       owner: root
-        #       group: root
-        #     '/etc/cfn/hooks.d/cfn-auto-reloader.conf':
-        #       content: !Sub |
-        #         [cfn-auto-reloader-hook]
-        #         triggers=post.update
-        #         path=Resources.JenkinsInstance.Metadata.AWS::CloudFormation::Init
-        #         action=/opt/aws/bin/cfn-init --verbose --stack=${AWS::StackName} --region=${AWS::Region} --resource=JenkinsInstance
-        #         runas=root
-        #   services:
-        #     sysvinit:
-        #       cfn-hup:
-        #         enabled: true
-        #         ensureRunning: true
-        #         files:
-        #           - '/etc/cfn/cfn-hup.conf'
-        #           - '/etc/cfn/hooks.d/cfn-auto-reloader.conf'
-        #       firewalld:
-        #         enabled: true
-        #         ensureRunning: true
-
-    # Properties:
-    #   BlockDeviceMappings:
-    #     - DeviceName: /dev/sdb
-    #       Ebs:
-    #         DeleteOnTermination: false
-    #         VolumeType: gp2
-    #         VolumeSize: 25
-    #   ImageId: !Ref LatestAmiId
-    #   InstanceType: !Ref InstanceType
-    #   NetworkInterfaces:
-    #     - AssociatePublicIpAddress: true
-    #       DeviceIndex: 0
-    #       DeleteOnTermination: true
-    #       SubnetId: !Ref PublicSubnetA
-    #       GroupSet: 
-    #         - !Ref ServerSecurityGroup
-    #   KeyName: !Ref KeyName
-    #   Tags:
-    #    - Key: Name
-    #      Value: !Ref InstanceTagName
-    #   UserData:
-    #     Fn::Base64: !Sub |
-    #       #!/bin/bash -x
-    #       /opt/aws/bin/cfn-init -v --stack ${AWS::StackName} --resource JenkinsInstance --region ${AWS::Region}
-    #       /opt/aws/bin/cfn-signal -e $? --region ${AWS::Region} --stack ${AWS::StackName} --resource JenkinsInstance
-    # CreationPolicy:
-    #   ResourceSignal:
-    #     Count: '1'
-    #     Timeout: PT15M
-
-  # ServerSecurityGroup:
-    # Type: AWS::EC2::SecurityGroup
-    # Properties:
-    #   GroupDescription: Security Group that will be used for the Jenkins instance. Open ports 22, and the JenkinsPort
-    #   VpcId: !Ref VPC
-    #   SecurityGroupIngress:
-    #     - IpProtocol: tcp
-    #       FromPort: 22
-    #       ToPort: 22
-    #       CidrIp: !Ref SSHLocation
-    #     - IpProtocol: tcp
-    #       FromPort: !Ref JenkinsPort
-    #       ToPort: !Ref JenkinsPort
-    #       CidrIp: !Ref SSHLocation
-
+  # ECS cluster, ECS Services, ECR and task definitions
   Cluster:
     Type: AWS::ECS::Cluster
     Properties:
@@ -371,84 +183,18 @@ Resources:
             Action: sts:AssumeRole
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
-  # ContainerSecurityGroup:
-  #   Type: AWS::EC2::SecurityGroup
-  #   Properties:
-  #     GroupName: !Join ['', [!Ref "AWS::StackName", "-ecs-sg" ]]
-  #     GroupDescription: Security group
-  #     SecurityGroupIngress:
-  #       - IpProtocol: tcp
-  #         FromPort: 8080
-  #         ToPort: 80
-  #         CidrIp: 0.0.0.0/0
-
-  Alb:
-    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
-    DependsOn:
-      - NATGateway
-    Properties:
-      Name: !Join ['', [!Ref "AWS::StackName", "-alb" ]]
-      Subnets:
-        - !Ref PublicSubnetA
-        - !Ref PublicSubnetB
-        - !Ref PublicSubnetC
-      Type: application
-      SecurityGroups:
-        - !GetAtt ALBSG.GroupId
-
-  TargetGroup:
-    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
-    Properties:
-      Name: !Join ['', [!Ref "AWS::StackName", "app-tg" ]]
-      VpcId: !Ref VPC
-      Protocol: HTTP
-      Port: 8000
-      HealthCheckPath: /
-      TargetType: ip
-
-  JenkinsTargetGroup:
-    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
-    Properties:
-      Name: !Join ['', [!Ref "AWS::StackName", "jenkins-tg" ]]
-      VpcId: !Ref VPC
-      Protocol: HTTP
-      Port: 8080
-      HealthCheckPath: /
-      TargetType: ip
-
-  Listener:
-    Type: 'AWS::ElasticLoadBalancingV2::Listener'
-    Properties:
-      DefaultActions:
-        - TargetGroupArn: !Ref TargetGroup
-          Type: forward
-      LoadBalancerArn: !Ref Alb
-      Port: 80
-      Protocol: HTTP
-  JenkinsListener:
-    Type: 'AWS::ElasticLoadBalancingV2::Listener'
-    Properties:
-      DefaultActions:
-        - TargetGroupArn: !Ref JenkinsTargetGroup
-          Type: forward
-      LoadBalancerArn: !Ref Alb
-      Port: 8080
-      Protocol: HTTP
-  
   ECRRepository: 
     Type: AWS::ECR::Repository
     Properties: 
       RepositoryName: !Join ['', [!Ref "AWS::StackName", "-app" ]]
-
   JenkinsRepository: 
     Type: AWS::ECR::Repository
     Properties: 
       RepositoryName: !Join ['', [!Ref "AWS::StackName", "-jenkins" ]]
-
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: "mass-app"
+      Family: !Join ['', [!Ref "AWS::StackName", "-app" ]]
       RequiresCompatibilities:
         - "FARGATE"
       ExecutionRoleArn: !Ref ExecutionRole
@@ -457,17 +203,16 @@ Resources:
       NetworkMode: "awsvpc"
       ContainerDefinitions:
         - Name: app
-          Image: !Ref ECRRepository
+          Image: !Join ['', [!GetAtt ECRRepository.RepositoryUri, ":latest" ]]
           MemoryReservation: 256
           Memory: 512
           PortMappings:
             - ContainerPort: 8000
               Protocol: tcp
-
   JenkinsTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: "mass-jenkins"
+      Family: !Join ['', [!Ref "AWS::StackName", "-jenkins" ]]
       RequiresCompatibilities:
         - "FARGATE"
       ExecutionRoleArn: !Ref ExecutionRole
@@ -476,45 +221,23 @@ Resources:
       NetworkMode: "awsvpc"
       ContainerDefinitions:
         - Name: app
-          Image: !Ref JenkinsRepository
+          Image: !Join ['', [!GetAtt JenkinsRepository.RepositoryUri, ":latest" ]]
           MemoryReservation: 256
           Memory: 512
+          Environment:
+            - Name: JENKINS_ADMIN_ID
+              Value: 'admin'
+            - Name: JENKINS_ADMIN_PASSWORD
+              value: !Ref JenkinsAdminPassword
           PortMappings:
             - ContainerPort: 8080
               Protocol: tcp
-  ALBSG:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: SG for the ALB
-      GroupName: !Join ['', [!Ref "AWS::StackName", "-alb-security-group" ]]
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - CidrIpv6: ::/0
-          FromPort: 80
-          ToPort: 80
-          IpProtocol: TCP
-          Description: 'Inbound rule for IPv6 traffic'
-        - CidrIp: 0.0.0.0/0
-          FromPort: 80
-          ToPort: 80
-          IpProtocol: TCP
-          Description: 'Inbound rule for IPv4 traffic'
-  ECSServiceSG:
-    Type: 'AWS::EC2::SecurityGroup'
-    Properties:
-      GroupDescription: SG for traffic between ALB and containers
-      GroupName: !Join ['', [!Ref "AWS::StackName", "-ecs-service-sg" ]]
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: -1
-          SourceSecurityGroupId: !GetAtt ALBSG.GroupId
-          Description: 'Inbound rule for all traffic'
   ECSService:
     Type: AWS::ECS::Service
     DependsOn:
       - Listener
     Properties:
-      ServiceName: "mass-app"
+      ServiceName: !Join ['', [!Ref "AWS::StackName", "-app" ]]
       LaunchType: FARGATE
       Cluster:
         Ref: "Cluster"
@@ -535,13 +258,12 @@ Resources:
             Ref: TargetGroup
           ContainerPort: 8000
           ContainerName: app
-
   JenkinsECSService:
     Type: AWS::ECS::Service
     DependsOn:
       - Listener
     Properties:
-      ServiceName: "mass-jenkins"
+      ServiceName: !Join ['', [!Ref "AWS::StackName", "-jenkins" ]]
       LaunchType: FARGATE
       Cluster:
         Ref: "Cluster"
@@ -559,10 +281,102 @@ Resources:
           Subnets: [!Ref PrivateSubnetA,!Ref PrivateSubnetB,!Ref PrivateSubnetC]
       LoadBalancers:
         - TargetGroupArn:
-            Ref: TargetGroup
+            Ref: JenkinsTargetGroup
           ContainerPort: 8080
           ContainerName: app
-
+  # ALB, Listeners and target groups
+  Alb:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    DependsOn:
+      - NATGateway
+    Properties:
+      Name: !Join ['', [!Ref "AWS::StackName", "-alb" ]]
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+        - !Ref PublicSubnetC
+      Type: application
+      SecurityGroups:
+        - !GetAtt ALBSG.GroupId
+  TargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: !Join ['', [!Ref "AWS::StackName", "app-tg" ]]
+      VpcId: !Ref VPC
+      Protocol: HTTP
+      Port: 8000
+      HealthCheckPath: /
+      TargetType: ip
+  JenkinsTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      Name: !Join ['', [!Ref "AWS::StackName", "jenkins-tg" ]]
+      VpcId: !Ref VPC
+      Protocol: HTTP
+      Port: 8080
+      HealthCheckPath: /
+      TargetType: ip
+  Listener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    DependsOn:
+      - Alb
+      - TargetGroup
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref Alb
+      Port: 80
+      Protocol: HTTP
+  JenkinsListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    DependsOn:
+      - Alb
+      - JenkinsTargetGroup
+    Properties:
+      DefaultActions:
+        - TargetGroupArn: !Ref JenkinsTargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref Alb
+      Port: 8080
+      Protocol: HTTP
+  ALBSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: SG for the ALB
+      GroupName: !Join ['', [!Ref "AWS::StackName", "-alb-security-group" ]]
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - CidrIpv6: ::/0
+          FromPort: 80
+          ToPort: 80
+          IpProtocol: TCP
+          Description: 'Inbound rule for IPv6 traffic'
+        - CidrIp: 0.0.0.0/0
+          FromPort: 80
+          ToPort: 80
+          IpProtocol: TCP
+          Description: 'Inbound rule for IPv4 traffic'
+        - CidrIpv6: ::/0
+          FromPort: 8080
+          ToPort: 8080
+          IpProtocol: TCP
+          Description: 'Inbound rule for IPv6 traffic'
+        - CidrIp: 0.0.0.0/0
+          FromPort: 8080
+          ToPort: 8080
+          IpProtocol: TCP
+          Description: 'Inbound rule for IPv4 traffic'
+  ECSServiceSG:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      GroupDescription: SG for traffic between ALB and containers
+      GroupName: !Join ['', [!Ref "AWS::StackName", "-ecs-service-sg" ]]
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: -1
+          SourceSecurityGroupId: !GetAtt ALBSG.GroupId
+          Description: 'Inbound rule for all traffic'
   # RDS
   RDSSecurityGroup:
     Type: "AWS::EC2::SecurityGroup"
@@ -601,6 +415,7 @@ Resources:
       AllocatedStorage: 20
       DBInstanceClass: db.t3.small
       Engine: "postgres"
+      DBName: "postgres"
       MasterUsername: !Ref MasterUsername
       MasterUserPassword: !Ref MasterUserPassword
       BackupRetentionPeriod: 7
@@ -613,3 +428,25 @@ Resources:
       VPCSecurityGroups: 
         - !Ref RDSSecurityGroup
       DBParameterGroupName: !Ref RDSDBParameterGroup
+  # SSM parameters for the app
+  DBHostParamater:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Description: RDS DB Host
+      Name: POSTGRES_HOST
+      Type: String
+      Value: !GetAtt RDSDBInstance.Endpoint.Address
+  DBUsernameParamater:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Description: RDS DB username
+      Name: POSTGRES_USER
+      Type: String
+      Value: !Ref MasterUsername
+  DBPasswordParamater:
+    Type: AWS::SSM::Parameter
+    Properties: 
+      Description: RDS DB password
+      Name: POSTGRES_PASSWORD
+      Type: String
+      Value: !Ref MasterUserPassword
