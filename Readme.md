@@ -21,3 +21,12 @@ sh push-jenkins.sh
 ![Jenkinsfile](/images/jenkins2.png "Source")
 
 ### 4. Run the Jenkins pileline to deploy the sample-app
+
+## Notes
+
+- The Jenkins can be access through the application load balancer URL with port 8080
+Example: http://app-alb-810186515.ap-south-1.elb.amazonaws.com:8080/
+
+- Sample app is deployed on application load balancer URL and with port 80
+
+- AWS SSM paramter store is used to store database credentials.
