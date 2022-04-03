@@ -166,7 +166,7 @@ Resources:
   Cluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: !Join ['', [!Ref "AWS::StackName", "-cluster" ]]
+      ClusterName: "app"
   LogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -186,15 +186,15 @@ Resources:
   ECRRepository: 
     Type: AWS::ECR::Repository
     Properties: 
-      RepositoryName: !Join ['', [!Ref "AWS::StackName", "-app" ]]
+      RepositoryName: "app"
   JenkinsRepository: 
     Type: AWS::ECR::Repository
     Properties: 
-      RepositoryName: !Join ['', [!Ref "AWS::StackName", "-jenkins" ]]
+      RepositoryName: "jenkins"
   TaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: !Join ['', [!Ref "AWS::StackName", "-app" ]]
+      Family: "app"
       RequiresCompatibilities:
         - "FARGATE"
       ExecutionRoleArn: !Ref ExecutionRole
@@ -237,7 +237,7 @@ Resources:
     DependsOn:
       - Listener
     Properties:
-      ServiceName: !Join ['', [!Ref "AWS::StackName", "-app" ]]
+      ServiceName: "app"
       LaunchType: FARGATE
       Cluster:
         Ref: "Cluster"

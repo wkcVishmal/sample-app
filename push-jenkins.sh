@@ -23,7 +23,7 @@ aws ecr get-login-password --region $region | docker login --username AWS --pass
 cd Jenkins && docker build -t jenkins -f Dockerfile .
 
 # Tag
-docker tag jenkins:latest $account_id.dkr.ecr.$region.amazonaws.com/mass-jenkins:latest
+docker tag jenkins:latest $account_id.dkr.ecr.$region.amazonaws.com/jenkins:latest
 
 # Push
-docker push $account_id.dkr.ecr.$region.amazonaws.com/mass-jenkins:latest
+docker push $account_id.dkr.ecr.$region.amazonaws.com/jenkins:latest
